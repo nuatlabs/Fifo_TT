@@ -4,47 +4,56 @@
  *
  * tt_um_nuatlabs_fifo_pwm
  * -----------------------
- * Two digital blocks sharing one Tiny Tapeout tile:
+ * Dual-function digital ASIC subsystem sharing a single Tiny Tapeout tile (1x1):
  *
- *  1) An 8-deep, 4-bit-wide asynchronous FIFO with Gray-code pointer
- *     CDC synchronizers, occupancy shown live on a 7-segment display.
- *  2) A small PWM peripheral (4-bit duty, reusable later as a
- *     memory-mapped SoC peripheral).
+ * Block 1: Asynchronous FIFO with Clock Domain Crossing (CDC)
+ *   - Depth: 8 entries, Width: 4 bits.
+ *   - Dual independent clock domains (Write clk: `clk`, Read clk: `clk` or `ext_rd_clk`).
+ *   - Classic Gray-coded read/write pointers with 2-stage flip-flop synchronizers.
+ *   - Live FIFO occupancy (0..8) decoded and driven onto the on-board 7-segment display.
  *
- * Pinout
- * ------
- * ui_in[0] : fifo_wr_en
- * ui_in[1] : fifo_rd_en
- * ui_in[2] : pwm_duty_load (pulse)
- * ui_in[3] : pwm_enable
- * ui_in[4] : fifo_rd_clk_sel  (0 = read domain clocked by ui_in[7] "ext_rd_clk",
- *                               1 = read domain clocked by the main "clk",
- *                               i.e. a synchronous fallback/test mode that
- *                               needs no external second clock source)
- * ui_in[5] : unused (reserved)
- * ui_in[6] : unused (reserved)
- * ui_in[7] : ext_rd_clk        (external clock for a true async CDC demo)
+ * Block 2: Reusable Pulse-Width Modulation (PWM) Peripheral
+ *   - Free-running 8-bit timebase counter with 4-bit programmable duty cycle (16 steps).
+ *   - Independent enable and synchronous duty reload latching.
+ *   - Suitable for immediate drop-in reuse as an SoC memory-mapped peripheral.
  *
- * uo_out[6:0] : 7-segment display of FIFO occupancy (0-8), {g,f,e,d,c,b,a}
- * uo_out[7]   : pwm_out
+ * Pinout & Interface Mapping
+ * --------------------------
+ * Dedicated Inputs (ui_in):
+ *   ui_in[0] : fifo_wr_en        (Write enable pulse, write domain)
+ *   ui_in[1] : fifo_rd_en        (Read enable pulse, read domain)
+ *   ui_in[2] : pwm_duty_load     (Capture duty_in into PWM duty register)
+ *   ui_in[3] : pwm_enable        (Enable PWM counter and output generation)
+ *   ui_in[4] : fifo_rd_clk_sel   (Read clock select:
+ *                                   1 = Synchronous fallback using primary `clk` (stock TT board)
+ *                                   0 = Asynchronous mode using `ext_rd_clk` on ui_in[7])
+ *   ui_in[5] : unused / reserved (tied to internal unused sink)
+ *   ui_in[6] : unused / reserved (tied to internal unused sink)
+ *   ui_in[7] : ext_rd_clk        (Secondary asynchronous read-domain clock input)
  *
- * uio_in[3:0]  : fifo_wr_data (write domain) / pwm duty_in (loaded on
- *                pwm_duty_load) -- same physical pins, time-multiplexed
- *                by which control pulse is asserted.
- * uio_out[7:4] : fifo_rd_data (read domain), zero-extended into [7:4]
- * uio[3:0]     : inputs, uio[7:4] : outputs (see uio_oe below)
+ * Dedicated Outputs (uo_out):
+ *   uo_out[6:0] : 7-segment display segments {g,f,e,d,c,b,a} showing FIFO occupancy (0..8)
+ *   uo_out[7]   : pwm_out (Digital PWM square wave)
+ *
+ * Bidirectional IOs (uio):
+ *   uio_in[3:0]  : Time-multiplexed inputs:
+ *                    - fifo_wr_data[3:0] (sampled when fifo_wr_en=1)
+ *                    - pwm_duty_in[3:0]  (sampled when pwm_duty_load=1)
+ *   uio_out[7:4] : fifo_rd_data[3:0] (Read domain FIFO output data)
+ *   uio_out[3:0] : Driven to 4'b0000 (disabled by output enable mask)
+ *   uio_oe[7:0]  : 8'b1111_0000 (Pins [7:4] configured as outputs, [3:0] as inputs)
  */
 `default_nettype none
 
 module tt_um_nuatlabs_fifo_pwm (
-    input  wire [7:0] ui_in,
-    output wire [7:0] uo_out,
-    input  wire [7:0] uio_in,
-    output wire [7:0] uio_out,
-    output wire [7:0] uio_oe,
-    input  wire       ena,
-    input  wire       clk,
-    input  wire       rst_n
+    input  wire [7:0] ui_in,    // Dedicated inputs
+    output wire [7:0] uo_out,   // Dedicated outputs
+    input  wire [7:0] uio_in,   // IOs: Input path
+    output wire [7:0] uio_out,  // IOs: Output path
+    output wire [7:0] uio_oe,   // IOs: Enable path (active-high: 0=input, 1=output)
+    input  wire       ena,      // Tiny Tapeout design select (always high when powered)
+    input  wire       clk,      // Primary system clock (write domain)
+    input  wire       rst_n     // Active-low global asynchronous reset
 );
 
   // -------------------------------------------------------------

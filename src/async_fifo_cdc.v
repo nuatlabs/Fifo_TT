@@ -4,44 +4,66 @@
  *
  * async_fifo_cdc
  * ---------------
- * Standard dual-clock async FIFO using Gray-coded read/write pointers
- * with 2-flop synchronizers across the clock-domain crossing (the
- * classic Cliff Cummings-style structure).
+ * Dual-clock asynchronous FIFO with Gray-coded read/write pointers and
+ * 2-stage flip-flop synchronizers across the clock-domain crossing (CDC),
+ * based on the classic Cummings methodology.
  *
- * DEPTH = 2**ADDR_W entries, each WIDTH bits wide.
+ * Architectural Principles:
+ * 1. Dual Independent Clocks:
+ *    - Write domain runs on `wr_clk` (data ingestion).
+ *    - Read domain runs on `rd_clk` (data consumption).
+ *    - Both clocks can have arbitrary, unrelated frequencies, phases, or jitters.
  *
- * occupancy_wr : number of entries currently in the FIFO, expressed
- *                in the WRITE clock domain (safe to use directly,
- *                since it is derived from the already-synchronized
- *                read pointer).
+ * 2. Gray-Code Pointers & Metastability Protection:
+ *    - Pointers are maintained as (ADDR_W + 1) bits (one extra MSB to distinguish
+ *      between empty and full wrap-arounds).
+ *    - Pointers are converted to Gray code before crossing into the opposing
+ *      clock domain. Because Gray code ensures only a single bit toggles per
+ *      increment, multi-bit sampling skew is eliminated.
+ *    - A 2-stage DFF synchronizer on each side resolves any single-bit
+ *      metastability before the pointer is sampled by full/empty comparison logic.
+ *
+ * 3. Full / Empty Generation:
+ *    - Empty flag is evaluated in the READ domain:
+ *        empty = (rd_ptr_gray == wr_ptr_gray_sync2)
+ *    - Full flag is evaluated in the WRITE domain:
+ *        full = (wr_ptr_gray == {~rd_ptr_gray_sync2[MSB:MSB-1], rd_ptr_gray_sync2[MSB-2:0]})
+ *        (MSB and MSB-1 inverted, lower bits identical)
+ *
+ * 4. Write-Domain Occupancy Display:
+ *    - `occupancy_wr`: Calculated in the write domain by decoding the synchronized
+ *      read pointer back into binary and computing `wr_ptr_bin - rd_ptr_bin_sync_wr`.
+ *    - This gives a safe, monotonic occupancy metric (0..DEPTH) for the 7-segment display.
  */
 `default_nettype none
 
 module async_fifo_cdc #(
-    parameter WIDTH  = 4,
-    parameter ADDR_W = 3                 // 2**ADDR_W = 8 entries
+    parameter WIDTH  = 4,                 // Data bus width per word
+    parameter ADDR_W = 3                  // Address width (DEPTH = 2**ADDR_W = 8 entries)
 ) (
-    // Write domain
-    input  wire             wr_clk,
-    input  wire             wr_rst_n,
-    input  wire             wr_en,
-    input  wire [WIDTH-1:0] wr_data,
-    output wire             full,
-    output wire [ADDR_W:0]  occupancy_wr,
+    // Write domain ports
+    input  wire             wr_clk,       // Write domain clock
+    input  wire             wr_rst_n,     // Write domain active-low async reset
+    input  wire             wr_en,        // Write enable (active-high)
+    input  wire [WIDTH-1:0] wr_data,      // Write data payload
+    output wire             full,         // Full flag (asserted in write domain)
+    output wire [ADDR_W:0]  occupancy_wr, // Current FIFO occupancy in write domain (0..DEPTH)
 
-    // Read domain
-    input  wire             rd_clk,
-    input  wire             rd_rst_n,
-    input  wire             rd_en,
-    output reg  [WIDTH-1:0] rd_data,
-    output wire             empty
+    // Read domain ports
+    input  wire             rd_clk,       // Read domain clock
+    input  wire             rd_rst_n,     // Read domain active-low async reset
+    input  wire             rd_en,        // Read enable (active-high)
+    output reg  [WIDTH-1:0] rd_data,      // Read data payload (registered output)
+    output wire             empty         // Empty flag (asserted in read domain)
 );
 
   localparam DEPTH = (1 << ADDR_W);
 
   // ---------------------------------------------------------------
-  // Storage (inferred dual-port RAM)
+  // Storage Memory (inferred dual-port RAM)
   // ---------------------------------------------------------------
+  // Port A: written synchronously by wr_clk
+  // Port B: read synchronously into rd_data by rd_clk
   reg [WIDTH-1:0] mem [0:DEPTH-1];
 
   // ---------------------------------------------------------------

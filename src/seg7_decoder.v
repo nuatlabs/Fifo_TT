@@ -4,16 +4,36 @@
  *
  * seg7_decoder
  * ------------
- * Decodes a 4-bit value (0-8, used here for FIFO occupancy 0..DEPTH)
- * into a 7-segment pattern, active-high, segment order {g,f,e,d,c,b,a}
- * matching the standard Tiny Tapeout demo-board 7-segment wiring
- * (seg[6:0] = g,f,e,d,c,b,a).
+ * Decodes a 4-bit binary value (0-8, representing FIFO occupancy 0..DEPTH)
+ * into an active-high 7-segment LED driver pattern.
+ *
+ * Segment Layout:
+ *      aaa
+ *     f   b
+ *     f   b
+ *      ggg
+ *     e   c
+ *     e   c
+ *      ddd
+ *
+ * Output Bit Mapping:
+ *   seg[0] = Segment 'a' (top)
+ *   seg[1] = Segment 'b' (top-right)
+ *   seg[2] = Segment 'c' (bottom-right)
+ *   seg[3] = Segment 'd' (bottom)
+ *   seg[4] = Segment 'e' (bottom-left)
+ *   seg[5] = Segment 'f' (top-left)
+ *   seg[6] = Segment 'g' (middle)
+ *
+ * Format: {g, f, e, d, c, b, a}
+ * This bit ordering directly matches the standard Tiny Tapeout demo-board
+ * 7-segment display wiring connected to dedicated output pins uo_out[6:0].
  */
 `default_nettype none
 
 module seg7_decoder (
-    input  wire [3:0] value,
-    output reg  [6:0] seg   // {g,f,e,d,c,b,a}
+    input  wire [3:0] value,   // Binary input value (valid range: 0..8)
+    output reg  [6:0] seg     // Active-high segment outputs: {g,f,e,d,c,b,a}
 );
 
   always @(*) begin

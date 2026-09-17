@@ -1,12 +1,19 @@
 `default_nettype none
 `timescale 1ns / 1ps
 
-/* This testbench just instantiates the module and makes some convenient wires
-   that can be driven / tested by the cocotb test.py.
-*/
+/*
+ * Tiny Tapeout Top-Level Testbench Wrapper
+ * ----------------------------------------
+ * Instantiates the top module `tt_um_nuatlabs_fifo_pwm` and routes
+ * the 8-bit Tiny Tapeout standard pin interface to testbench registers
+ * and wires driven directly by the Cocotb testbench environment (`test.py`).
+ *
+ * Waveform Output:
+ * - Generates `tb.fst` for efficient signal inspection with GTKWave or Surfer.
+ */
 module tb ();
 
-  // Dump the signals to a FST file. You can view it with gtkwave or surfer.
+  // Configure waveform dumping (Fast Signal Trace - FST format)
   initial begin
     $dumpfile("tb.fst");
     $dumpvars(0, tb);

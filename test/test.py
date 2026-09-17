@@ -1,10 +1,33 @@
 # SPDX-FileCopyrightText: © 2026 NUAT Labs
 # SPDX-License-Identifier: Apache-2.0
+"""
+Cocotb Testbench Suite for tt_um_nuatlabs_fifo_pwm
+--------------------------------------------------
+Comprehensive functional verification for:
+  1. Dual-Clock Asynchronous FIFO (CDC) with Gray-code synchronizers.
+  2. 7-Segment occupancy display decoding.
+  3. Reusable 16-level PWM peripheral with duty cycle reload.
+
+Included Test Cases:
+  - test_fifo_sync_mode:
+      Verifies single-clock fallback mode (ui_in[4] = 1).
+      Exercises FIFO push/pop and confirms exact 7-segment occupancy display updates.
+  - test_fifo_full_flag_via_occupancy:
+      Fills the FIFO to its full capacity (8 items) and validates that excess writes
+      are discarded without corrupting internal memory or overflowing occupancy.
+  - test_fifo_true_async_cdc:
+      Simulates two completely independent clocks (dut.clk for write, ui_in[7] for read).
+      Validates 2-stage Gray-pointer synchronization latency across the clock domains.
+  - test_pwm_duty_load:
+      Configures the PWM generator duty cycle (e.g. 50%) and measures the average
+      high pulse-width over a full 256-cycle timebase period.
+"""
 
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, RisingEdge
 
+# 7-Segment Lookup Table: maps binary value (0..8) to {g, f, e, d, c, b, a}
 SEG_LUT = {
     0: 0b0111111, 1: 0b0000110, 2: 0b1011011, 3: 0b1001111,
     4: 0b1100110, 5: 0b1101101, 6: 0b1111101, 7: 0b0000111,
