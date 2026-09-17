@@ -5,6 +5,8 @@
 *.fst.hier
 runs
 tt_submission
+tt_submission.zip
+*.zip
 src/user_config.json
 src/config_merged.json
 test/sim_build
